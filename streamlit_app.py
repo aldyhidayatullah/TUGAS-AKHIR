@@ -1,6 +1,9 @@
 import streamlit as st
 
 st.title("🎈 My new app")
-st.write(
-    "Let's start building! For help and inspiration, head over to [docs.streamlit.io](https://docs.streamlit.io/)."
-)
+st.write("Let's start building!")
+
+# Contoh interaksi sederhana
+nama = st.text_input("Siapa nama Anda?")
+if st.button("Sapa Saya"):
+    st.write(f"Halo {nama}, selamat membangun aplikasi!")
