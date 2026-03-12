@@ -1,292 +1,244 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import plotly.express as px
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-
-# =========================
+# ===============================
 # KONFIGURASI HALAMAN
-# =========================
+# ===============================
 
 st.set_page_config(
-    page_title="Borneo Express Analytics",
+    page_title="Prediksi Volume Pengiriman Paket",
     layout="wide"
 )
 
-st.title("📦 Prediksi Volume Pengiriman Paket")
-st.subheader("Borneo Express Pontianak")
+st.title("Perbandingan Prediksi Volume Pengiriman Paket")
+st.subheader("Random Forest vs Decision Tree - Borneo Express Pontianak")
 
-
-# =========================
-# GENERATE DATASET SIMULASI
-# =========================
+# ===============================
+# LOAD DATASET
+# ===============================
 
 @st.cache_data
-def generate_borneo_data():
-
-    np.random.seed(42)
-    n = 5000
-
-    data = {
-
-        "Hari_dalam_Minggu": np.random.randint(1,8,n),
-
-        "Jenis_Layanan": np.random.choice(
-            ["Reguler","Kilat","SameDay"], n
-        ),
-
-        "Berat_Paket_KG": np.round(np.random.uniform(0.5,20,n),2),
-
-        "Jarak_KM": np.round(np.random.uniform(5,80,n),2),
-
-        "Volume_Paket": np.random.randint(50,500,n)
-
-    }
-
-    df = pd.DataFrame(data)
-
+def load_data():
+    df = pd.read_csv("dataset_pengiriman.csv")
     return df
 
+df = load_data()
 
-df = generate_borneo_data()
+# ===============================
+# PREPROCESSING
+# ===============================
 
+le = LabelEncoder()
 
-# =========================
-# PREPROCESSING DATA
-# =========================
-
-df["Jenis_Layanan"] = df["Jenis_Layanan"].map({
-    "Reguler":0,
-    "Kilat":1,
-    "SameDay":2
-})
+df["Jenis_Layanan"] = le.fit_transform(df["Jenis_Layanan"])
+df["Tujuan_Pulau"] = le.fit_transform(df["Tujuan_Pulau"])
 
 X = df.drop("Volume_Paket", axis=1)
 y = df["Volume_Paket"]
 
 X_train, X_test, y_train, y_test = train_test_split(
-    X,y,test_size=0.2,random_state=42
-)
-
-
-# =========================
-# SIDEBAR PARAMETER MODEL
-# =========================
-
-st.sidebar.title("⚙️ Parameter Model")
-
-n_estimators = st.sidebar.slider(
-    "Jumlah Pohon Random Forest",
-    50,
-    300,
-    100
-)
-
-max_depth = st.sidebar.slider(
-    "Kedalaman Decision Tree",
-    3,
-    20,
-    10
-)
-
-
-# =========================
-# TRAIN MODEL
-# =========================
-
-# Decision Tree
-dt_model = DecisionTreeRegressor(
-    max_depth=max_depth,
+    X,
+    y,
+    test_size=0.2,
     random_state=42
 )
 
-dt_model.fit(X_train,y_train)
+# ===============================
+# MODEL MACHINE LEARNING
+# ===============================
 
-# Random Forest
 rf_model = RandomForestRegressor(
-    n_estimators=n_estimators,
+    n_estimators=100,
     random_state=42
 )
 
-rf_model.fit(X_train,y_train)
+dt_model = DecisionTreeRegressor(
+    max_depth=10,
+    random_state=42
+)
 
+rf_model.fit(X_train, y_train)
+dt_model.fit(X_train, y_train)
 
-# =========================
-# PREDIKSI
-# =========================
-
-pred_dt = dt_model.predict(X_test)
 pred_rf = rf_model.predict(X_test)
+pred_dt = dt_model.predict(X_test)
 
+# ===============================
+# SIDEBAR INPUT DATA
+# ===============================
 
-# =========================
-# EVALUASI MODEL
-# =========================
+st.sidebar.header("Input Data Pengiriman")
 
-mae_dt = mean_absolute_error(y_test,pred_dt)
-mae_rf = mean_absolute_error(y_test,pred_rf)
+tahun = st.sidebar.slider("Tahun", 2022, 2030, 2026)
 
-r2_dt = r2_score(y_test,pred_dt)
-r2_rf = r2_score(y_test,pred_rf)
+hari = st.sidebar.slider("Hari dalam Minggu", 1, 7, 3)
 
+berat = st.sidebar.slider("Berat Paket (KG)", 0.5, 30.0, 5.0)
 
-# =========================
-# METRIK UTAMA
-# =========================
+jarak = st.sidebar.slider("Jarak Pengiriman (KM)", 1, 100, 20)
 
-col1,col2,col3 = st.columns(3)
-
-col1.metric("Total Data", len(df))
-
-col2.metric(
-    "Rata-rata Volume Paket",
-    f"{df['Volume_Paket'].mean():.1f}"
+layanan = st.sidebar.selectbox(
+    "Jenis Layanan",
+    ["Reguler", "Kilat", "SameDay"]
 )
 
-col3.metric(
-    "Akurasi Random Forest (R²)",
-    f"{rf_model.score(X_test,y_test)*100:.1f}%"
+pulau = st.sidebar.selectbox(
+    "Tujuan Pulau",
+    ["Kalimantan", "Jawa", "Sumatera", "Sulawesi", "Papua"]
 )
 
+# encoding input
+layanan_encode = {"Reguler":0,"Kilat":1,"SameDay":2}
+pulau_encode = {
+    "Kalimantan":0,
+    "Jawa":1,
+    "Sumatera":2,
+    "Sulawesi":3,
+    "Papua":4
+}
 
-st.markdown("---")
+input_data = np.array([[
 
+    tahun,
+    hari,
+    berat,
+    jarak,
+    layanan_encode[layanan],
+    pulau_encode[pulau]
 
-# =========================
+]])
+
+# ===============================
+# PREDIKSI
+# ===============================
+
+pred_rf_input = rf_model.predict(input_data)[0]
+pred_dt_input = dt_model.predict(input_data)[0]
+
+# ===============================
 # TABS DASHBOARD
-# =========================
+# ===============================
 
-tab1, tab2, tab3 = st.tabs([
-    "📊 Visualisasi Data",
-    "🤖 Perbandingan Algoritma",
-    "🔮 Prediksi Manual"
-])
+tab1,tab2,tab3 = st.tabs(["Prediksi","Dataset","Evaluasi Model"])
 
-
-# =========================
-# VISUALISASI DATA
-# =========================
+# ===============================
+# TAB PREDIKSI
+# ===============================
 
 with tab1:
 
-    st.subheader("Distribusi Volume Pengiriman")
+    st.subheader("Hasil Prediksi Volume Pengiriman")
+
+    col1,col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "Random Forest",
+            f"{pred_rf_input:.0f} Paket"
+        )
+
+    with col2:
+        st.metric(
+            "Decision Tree",
+            f"{pred_dt_input:.0f} Paket"
+        )
+
+    st.subheader("Feature Importance")
+
+    features = X.columns
+
+    col3,col4 = st.columns(2)
+
+    with col3:
+
+        st.write("Random Forest")
+
+        importance = rf_model.feature_importances_
+
+        fig,ax = plt.subplots()
+
+        ax.bar(features,importance)
+
+        plt.xticks(rotation=45)
+
+        st.pyplot(fig)
+
+    with col4:
+
+        st.write("Decision Tree")
+
+        importance = dt_model.feature_importances_
+
+        fig,ax = plt.subplots()
+
+        ax.bar(features,importance)
+
+        plt.xticks(rotation=45)
+
+        st.pyplot(fig)
+
+# ===============================
+# TAB DATASET
+# ===============================
+
+with tab2:
+
+    st.subheader("Dataset Pengiriman")
+
+    st.dataframe(df)
 
     fig = px.histogram(
         df,
         x="Volume_Paket",
         nbins=40,
-        color_discrete_sequence=["#2E8B57"]
+        title="Distribusi Volume Pengiriman"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,use_container_width=True)
 
-
-    st.subheader("Pengiriman Berdasarkan Jenis Layanan")
-
-    layanan_map = {0:"Reguler",1:"Kilat",2:"SameDay"}
-
-    df_temp = df.copy()
-    df_temp["Jenis_Layanan"] = df_temp["Jenis_Layanan"].map(layanan_map)
-
-    fig2 = px.box(
-        df_temp,
-        x="Jenis_Layanan",
-        y="Volume_Paket",
-        color="Jenis_Layanan"
-    )
-
-    st.plotly_chart(fig2, use_container_width=True)
-
-
-# =========================
-# PERBANDINGAN MODEL
-# =========================
-
-with tab2:
-
-    st.subheader("Perbandingan Algoritma")
-
-    comp_df = pd.DataFrame({
-
-        "Algoritma":[
-            "Decision Tree",
-            "Random Forest"
-        ],
-
-        "MAE":[
-            mae_dt,
-            mae_rf
-        ],
-
-        "R2":[
-            r2_dt,
-            r2_rf
-        ]
-
-    })
-
-    st.dataframe(comp_df)
-
-    fig_comp = px.bar(
-        comp_df,
-        x="Algoritma",
-        y="MAE",
-        color="Algoritma",
-        text_auto=".2f"
-    )
-
-    st.plotly_chart(fig_comp, use_container_width=True)
-
-    if mae_rf < mae_dt:
-
-        st.success(
-            "Random Forest memiliki performa lebih baik berdasarkan MAE"
-        )
-
-    else:
-
-        st.success(
-            "Decision Tree memiliki performa lebih baik berdasarkan MAE"
-        )
-
-
-# =========================
-# PREDIKSI MANUAL
-# =========================
+# ===============================
+# TAB EVALUASI MODEL
+# ===============================
 
 with tab3:
 
-    st.subheader("Input Prediksi Pengiriman")
+    st.subheader("Evaluasi Model")
 
-    col1,col2 = st.columns(2)
+    mae_rf = mean_absolute_error(y_test,pred_rf)
+    mae_dt = mean_absolute_error(y_test,pred_dt)
 
-    hari = col1.slider("Hari dalam Minggu",1,7)
-    layanan = col2.selectbox(
-        "Jenis Layanan",
-        ["Reguler","Kilat","SameDay"]
+    mse_rf = mean_squared_error(y_test,pred_rf)
+    mse_dt = mean_squared_error(y_test,pred_dt)
+
+    r2_rf = r2_score(y_test,pred_rf)
+    r2_dt = r2_score(y_test,pred_dt)
+
+    eval_df = pd.DataFrame({
+
+        "Model":["Random Forest","Decision Tree"],
+        "MAE":[mae_rf,mae_dt],
+        "MSE":[mse_rf,mse_dt],
+        "R2 Score":[r2_rf,r2_dt]
+
+    })
+
+    st.dataframe(eval_df)
+
+    fig = px.bar(
+        eval_df,
+        x="Model",
+        y="R2 Score",
+        color="Model",
+        title="Perbandingan Performa Model"
     )
 
-    berat = st.slider("Berat Paket (KG)",0.5,20.0,5.0)
-    jarak = st.slider("Jarak Pengiriman (KM)",5,80,20)
-
-    layanan_encoded = {
-        "Reguler":0,
-        "Kilat":1,
-        "SameDay":2
-    }[layanan]
-
-    input_data = np.array([[hari,layanan_encoded,berat,jarak]])
-
-    if st.button("Prediksi"):
-
-        pred_dt = dt_model.predict(input_data)[0]
-        pred_rf = rf_model.predict(input_data)[0]
-
-        st.success(f"Prediksi Decision Tree: {int(pred_dt)} paket")
-
-        st.success(f"Prediksi Random Forest: {int(pred_rf)} paket")
+    st.plotly_chart(fig,use_container_width=True)   
