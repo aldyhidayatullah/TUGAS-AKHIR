@@ -20,7 +20,7 @@ st.subheader("Perbandingan Random Forest Regressor vs Linear Regression")
 # ===============================
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data_historis_pengiriman.csv")
+    df = pd.read_csv("data_historis_paket.csv")
     
     # 🔥 FIX KOLOM (ANTI ERROR)
     df.columns = df.columns.str.lower().str.strip()
