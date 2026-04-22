@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import plotly.express as px
 
 from sklearn.ensemble import RandomForestRegressor
@@ -9,13 +8,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # ===============================
-# KONFIGURASI
+# CONFIG
 # ===============================
-
-st.set_page_config(
-    page_title="Prediksi Volume Paket Terkirim",
-    layout="wide"
-)
+st.set_page_config(page_title="Prediksi Paket Terkirim", layout="wide")
 
 st.title("Prediksi Volume Paket Terkirim")
 st.subheader("Perbandingan Random Forest Regressor vs Linear Regression")
@@ -23,39 +18,62 @@ st.subheader("Perbandingan Random Forest Regressor vs Linear Regression")
 # ===============================
 # LOAD DATA
 # ===============================
-
 @st.cache_data
 def load_data():
     df = pd.read_csv("dataset_pengiriman.csv")
+    
+    # 🔥 FIX KOLOM (ANTI ERROR)
+    df.columns = df.columns.str.lower().str.strip()
+    
     return df
 
 df = load_data()
 
 # ===============================
-# PREPROCESSING + AGREGASI
+# CEK KOLOM
 # ===============================
+st.write("Kolom dataset:", df.columns)
 
-df['created_at'] = pd.to_datetime(df['created_at'])
+# ===============================
+# CEK created_at
+# ===============================
+if 'created_at' not in df.columns:
+    st.error("Kolom 'created_at' tidak ditemukan. Periksa dataset!")
+    st.stop()
 
+# ===============================
+# PREPROCESSING
+# ===============================
+df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
+
+# hapus data kosong
+df = df.dropna(subset=['created_at'])
+
+# ===============================
 # AGREGASI HARIAN
+# ===============================
 df['tanggal'] = df['created_at'].dt.date
 
 df_harian = df.groupby('tanggal').size().reset_index(name='jumlah_paket')
 
 df_harian['tanggal'] = pd.to_datetime(df_harian['tanggal'])
 
+# ===============================
 # FEATURE ENGINEERING
+# ===============================
 df_harian['hari'] = df_harian['tanggal'].dt.day
 df_harian['bulan'] = df_harian['tanggal'].dt.month
 df_harian['tahun'] = df_harian['tanggal'].dt.year
 df_harian['hari_dalam_minggu'] = df_harian['tanggal'].dt.weekday()
 
 # ===============================
-# SPLIT DATA (TIME SERIES)
+# SORT DATA
 # ===============================
-
 df_harian = df_harian.sort_values('tanggal')
 
+# ===============================
+# SPLIT DATA (80:20)
+# ===============================
 train_size = int(len(df_harian) * 0.8)
 
 train = df_harian[:train_size]
@@ -70,7 +88,6 @@ y_test = test['jumlah_paket']
 # ===============================
 # MODEL
 # ===============================
-
 rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
 lr_model = LinearRegression()
 
@@ -83,37 +100,32 @@ pred_lr = lr_model.predict(X_test)
 # ===============================
 # SIDEBAR INPUT
 # ===============================
-
 st.sidebar.header("Input Prediksi")
 
-tanggal = st.sidebar.date_input("Pilih Tanggal")
+tanggal_input = st.sidebar.date_input("Pilih Tanggal")
 
-hari = tanggal.day
-bulan = tanggal.month
-tahun = tanggal.year
-hari_dalam_minggu = tanggal.weekday()
+hari = tanggal_input.day
+bulan = tanggal_input.month
+tahun = tanggal_input.year
+hari_dalam_minggu = tanggal_input.weekday()
 
 input_data = np.array([[hari, bulan, tahun, hari_dalam_minggu]])
 
 # ===============================
 # PREDIKSI
 # ===============================
-
 pred_rf_input = rf_model.predict(input_data)[0]
 pred_lr_input = lr_model.predict(input_data)[0]
 
 # ===============================
 # TABS
 # ===============================
-
 tab1, tab2, tab3 = st.tabs(["Prediksi", "Dataset", "Evaluasi"])
 
 # ===============================
-# TAB 1
+# TAB 1 - HASIL
 # ===============================
-
 with tab1:
-
     st.subheader("Hasil Prediksi")
 
     col1, col2 = st.columns(2)
@@ -125,11 +137,9 @@ with tab1:
         st.metric("Linear Regression", f"{int(pred_lr_input)} Paket")
 
 # ===============================
-# TAB 2
+# TAB 2 - DATA
 # ===============================
-
 with tab2:
-
     st.subheader("Data Agregasi Harian")
     st.dataframe(df_harian)
 
@@ -139,15 +149,12 @@ with tab2:
         y="jumlah_paket",
         title="Trend Paket Terkirim"
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
 # ===============================
-# TAB 3
+# TAB 3 - EVALUASI
 # ===============================
-
 with tab3:
-
     st.subheader("Evaluasi Model")
 
     mae_rf = mean_absolute_error(y_test, pred_rf)
@@ -175,5 +182,4 @@ with tab3:
         color="Model",
         title="Perbandingan MAE"
     )
-
     st.plotly_chart(fig, use_container_width=True)
