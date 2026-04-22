@@ -14,31 +14,41 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 st.set_page_config(page_title="Prediksi Paket Terkirim", layout="wide")
 
 st.title("Prediksi Volume Paket Terkirim")
-st.subheader("Perbandingan Random Forest Regressor vs Linear Regression")
+st.subheader("Random Forest Regressor vs Linear Regression")
 
 # ===============================
-# LOAD DATA (ANTI ERROR)
+# LOAD DATA SUPER AMAN
 # ===============================
 @st.cache_data
 def load_data():
     file_path = "data_historis_paket.csv"
 
-    # cek file lokal
-    if os.path.exists(file_path):
-        try:
-            df = pd.read_csv(file_path, encoding='utf-8')
-        except UnicodeDecodeError:
-            try:
-                df = pd.read_csv(file_path, encoding='cp1252')
-            except:
-                df = pd.read_csv(file_path, encoding='latin-1')
-    else:
+    if not os.path.exists(file_path):
         return None
 
-    # bersihkan kolom
-    df.columns = df.columns.str.lower().str.strip()
+    encodings = ['utf-8', 'cp1252', 'latin-1']
+    separators = [',', ';', '|', '\t']
 
-    return df
+    for enc in encodings:
+        for sep in separators:
+            try:
+                df = pd.read_csv(
+                    file_path,
+                    encoding=enc,
+                    sep=sep,
+                    engine='python',
+                    on_bad_lines='skip'
+                )
+
+                if df.shape[1] > 1:
+                    df.columns = df.columns.str.lower().str.strip()
+                    return df
+
+            except:
+                continue
+
+    return None
+
 
 df = load_data()
 
@@ -46,21 +56,24 @@ df = load_data()
 # UPLOAD FILE (BACKUP)
 # ===============================
 if df is None:
-    st.warning("File tidak ditemukan. Upload dataset CSV")
+    st.warning("File tidak terbaca, silakan upload dataset")
+
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
-        try:
-            df = pd.read_csv(uploaded_file, encoding='utf-8')
-        except:
-            df = pd.read_csv(uploaded_file, encoding='latin-1')
-
+        df = pd.read_csv(
+            uploaded_file,
+            encoding='latin-1',
+            sep=None,
+            engine='python',
+            on_bad_lines='skip'
+        )
         df.columns = df.columns.str.lower().str.strip()
     else:
         st.stop()
 
 # ===============================
-# DEBUG KOLOM
+# DEBUG INFO
 # ===============================
 st.write("Kolom dataset:", df.columns)
 
@@ -79,7 +92,7 @@ if date_col is None:
     st.error("Kolom tanggal tidak ditemukan!")
     st.stop()
 
-st.success(f"Menggunakan kolom waktu: {date_col}")
+st.success(f"Menggunakan kolom: {date_col}")
 
 # ===============================
 # PREPROCESSING
@@ -93,7 +106,6 @@ df = df.dropna(subset=[date_col])
 df['tanggal'] = df[date_col].dt.date
 
 df_harian = df.groupby('tanggal').size().reset_index(name='jumlah_paket')
-
 df_harian['tanggal'] = pd.to_datetime(df_harian['tanggal'])
 
 # ===============================
@@ -133,18 +145,18 @@ pred_rf = rf_model.predict(X_test)
 pred_lr = lr_model.predict(X_test)
 
 # ===============================
-# SIDEBAR INPUT
+# INPUT USER
 # ===============================
 st.sidebar.header("Input Prediksi")
 
 tanggal_input = st.sidebar.date_input("Pilih Tanggal")
 
-hari = tanggal_input.day
-bulan = tanggal_input.month
-tahun = tanggal_input.year
-hari_dalam_minggu = tanggal_input.weekday()
-
-input_data = np.array([[hari, bulan, tahun, hari_dalam_minggu]])
+input_data = np.array([[
+    tanggal_input.day,
+    tanggal_input.month,
+    tanggal_input.year,
+    tanggal_input.weekday()
+]])
 
 # ===============================
 # PREDIKSI
@@ -153,7 +165,7 @@ pred_rf_input = rf_model.predict(input_data)[0]
 pred_lr_input = lr_model.predict(input_data)[0]
 
 # ===============================
-# TAB
+# TAB UI
 # ===============================
 tab1, tab2, tab3 = st.tabs(["Prediksi", "Dataset", "Evaluasi"])
 
@@ -176,9 +188,11 @@ with tab1:
 # ===============================
 with tab2:
     st.subheader("Data Agregasi Harian")
-    st.dataframe(df_harian)
 
-    fig = px.line(df_harian, x="tanggal", y="jumlah_paket", title="Trend Paket")
+    st.dataframe(df_harian.head())
+
+    fig = px.line(df_harian, x="tanggal", y="jumlah_paket",
+                  title="Trend Paket Terkirim")
     st.plotly_chart(fig, use_container_width=True)
 
 # ===============================
@@ -196,14 +210,16 @@ with tab3:
     r2_rf = r2_score(y_test, pred_rf)
     r2_lr = r2_score(y_test, pred_lr)
 
-    eval_df = pd.DataFrame({
+    hasil = pd.DataFrame({
         "Model": ["Random Forest", "Linear Regression"],
         "MAE": [mae_rf, mae_lr],
         "RMSE": [rmse_rf, rmse_lr],
         "R2": [r2_rf, r2_lr]
     })
 
-    st.dataframe(eval_df)
+    st.dataframe(hasil)
 
-    fig = px.bar(eval_df, x="Model", y="MAE", color="Model", title="Perbandingan MAE")
+    fig = px.bar(hasil, x="Model", y="MAE",
+                 color="Model",
+                 title="Perbandingan MAE")
     st.plotly_chart(fig, use_container_width=True)
