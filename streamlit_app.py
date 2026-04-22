@@ -114,7 +114,7 @@ df_harian['tanggal'] = pd.to_datetime(df_harian['tanggal'])
 df_harian['hari'] = df_harian['tanggal'].dt.day
 df_harian['bulan'] = df_harian['tanggal'].dt.month
 df_harian['tahun'] = df_harian['tanggal'].dt.year
-df_harian['hari_dalam_minggu'] = df_harian['tanggal'].dt.weekday()
+df_harian['hari_dalam_minggu'] = df_harian['tanggal'].dt.weekday
 
 df_harian = df_harian.sort_values('tanggal')
 
