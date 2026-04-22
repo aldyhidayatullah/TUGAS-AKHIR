@@ -5,25 +5,23 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # ===============================
-# KONFIGURASI HALAMAN
+# KONFIGURASI
 # ===============================
 
 st.set_page_config(
-    page_title="Prediksi Volume Pengiriman Paket",
+    page_title="Prediksi Volume Paket Terkirim",
     layout="wide"
 )
 
-st.title("Perbandingan Prediksi Volume Pengiriman Paket")
-st.subheader("Random Forest vs Decision Tree - Borneo Express Pontianak")
+st.title("Prediksi Volume Paket Terkirim")
+st.subheader("Perbandingan Random Forest Regressor vs Linear Regression")
 
 # ===============================
-# LOAD DATASET
+# LOAD DATA
 # ===============================
 
 @st.cache_data
@@ -34,201 +32,138 @@ def load_data():
 df = load_data()
 
 # ===============================
-# PREPROCESSING
+# PREPROCESSING + AGREGASI
 # ===============================
 
-le = LabelEncoder()
+df['created_at'] = pd.to_datetime(df['created_at'])
 
-df["Jenis_Layanan"] = le.fit_transform(df["Jenis_Layanan"])
-df["Tujuan_Pulau"] = le.fit_transform(df["Tujuan_Pulau"])
+# AGREGASI HARIAN
+df['tanggal'] = df['created_at'].dt.date
 
-X = df.drop("Volume_Paket", axis=1)
-y = df["Volume_Paket"]
+df_harian = df.groupby('tanggal').size().reset_index(name='jumlah_paket')
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42
-)
+df_harian['tanggal'] = pd.to_datetime(df_harian['tanggal'])
+
+# FEATURE ENGINEERING
+df_harian['hari'] = df_harian['tanggal'].dt.day
+df_harian['bulan'] = df_harian['tanggal'].dt.month
+df_harian['tahun'] = df_harian['tanggal'].dt.year
+df_harian['hari_dalam_minggu'] = df_harian['tanggal'].dt.weekday()
 
 # ===============================
-# MODEL MACHINE LEARNING
+# SPLIT DATA (TIME SERIES)
 # ===============================
 
-rf_model = RandomForestRegressor(
-    n_estimators=100,
-    random_state=42
-)
+df_harian = df_harian.sort_values('tanggal')
 
-dt_model = DecisionTreeRegressor(
-    max_depth=10,
-    random_state=42
-)
+train_size = int(len(df_harian) * 0.8)
+
+train = df_harian[:train_size]
+test = df_harian[train_size:]
+
+X_train = train[['hari','bulan','tahun','hari_dalam_minggu']]
+y_train = train['jumlah_paket']
+
+X_test = test[['hari','bulan','tahun','hari_dalam_minggu']]
+y_test = test['jumlah_paket']
+
+# ===============================
+# MODEL
+# ===============================
+
+rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+lr_model = LinearRegression()
 
 rf_model.fit(X_train, y_train)
-dt_model.fit(X_train, y_train)
+lr_model.fit(X_train, y_train)
 
 pred_rf = rf_model.predict(X_test)
-pred_dt = dt_model.predict(X_test)
+pred_lr = lr_model.predict(X_test)
 
 # ===============================
-# SIDEBAR INPUT DATA
+# SIDEBAR INPUT
 # ===============================
 
-st.sidebar.header("Input Data Pengiriman")
+st.sidebar.header("Input Prediksi")
 
-tahun = st.sidebar.slider("Tahun", 2022, 2030, 2026)
+tanggal = st.sidebar.date_input("Pilih Tanggal")
 
-hari = st.sidebar.slider("Hari dalam Minggu", 1, 7, 3)
+hari = tanggal.day
+bulan = tanggal.month
+tahun = tanggal.year
+hari_dalam_minggu = tanggal.weekday()
 
-berat = st.sidebar.slider("Berat Paket (KG)", 0.5, 30.0, 5.0)
-
-jarak = st.sidebar.slider("Jarak Pengiriman (KM)", 1, 100, 20)
-
-layanan = st.sidebar.selectbox(
-    "Jenis Layanan",
-    ["Reguler", "Kilat", "SameDay"]
-)
-
-pulau = st.sidebar.selectbox(
-    "Tujuan Pulau",
-    ["Kalimantan", "Jawa", "Sumatera", "Sulawesi", "Papua"]
-)
-
-# encoding input
-layanan_encode = {"Reguler":0,"Kilat":1,"SameDay":2}
-pulau_encode = {
-    "Kalimantan":0,
-    "Jawa":1,
-    "Sumatera":2,
-    "Sulawesi":3,
-    "Papua":4
-}
-
-input_data = np.array([[
-
-    tahun,
-    hari,
-    berat,
-    jarak,
-    layanan_encode[layanan],
-    pulau_encode[pulau]
-
-]])
+input_data = np.array([[hari, bulan, tahun, hari_dalam_minggu]])
 
 # ===============================
 # PREDIKSI
 # ===============================
 
 pred_rf_input = rf_model.predict(input_data)[0]
-pred_dt_input = dt_model.predict(input_data)[0]
+pred_lr_input = lr_model.predict(input_data)[0]
 
 # ===============================
-# TABS DASHBOARD
+# TABS
 # ===============================
 
-tab1,tab2,tab3 = st.tabs(["Prediksi","Dataset","Evaluasi Model"])
+tab1, tab2, tab3 = st.tabs(["Prediksi", "Dataset", "Evaluasi"])
 
 # ===============================
-# TAB PREDIKSI
+# TAB 1
 # ===============================
 
 with tab1:
 
-    st.subheader("Hasil Prediksi Volume Pengiriman")
+    st.subheader("Hasil Prediksi")
 
-    col1,col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
     with col1:
-        st.metric(
-            "Random Forest",
-            f"{pred_rf_input:.0f} Paket"
-        )
+        st.metric("Random Forest", f"{int(pred_rf_input)} Paket")
 
     with col2:
-        st.metric(
-            "Decision Tree",
-            f"{pred_dt_input:.0f} Paket"
-        )
-
-    st.subheader("Feature Importance")
-
-    features = X.columns
-
-    col3,col4 = st.columns(2)
-
-    with col3:
-
-        st.write("Random Forest")
-
-        importance = rf_model.feature_importances_
-
-        fig,ax = plt.subplots()
-
-        ax.bar(features,importance)
-
-        plt.xticks(rotation=45)
-
-        st.pyplot(fig)
-
-    with col4:
-
-        st.write("Decision Tree")
-
-        importance = dt_model.feature_importances_
-
-        fig,ax = plt.subplots()
-
-        ax.bar(features,importance)
-
-        plt.xticks(rotation=45)
-
-        st.pyplot(fig)
+        st.metric("Linear Regression", f"{int(pred_lr_input)} Paket")
 
 # ===============================
-# TAB DATASET
+# TAB 2
 # ===============================
 
 with tab2:
 
-    st.subheader("Dataset Pengiriman")
+    st.subheader("Data Agregasi Harian")
+    st.dataframe(df_harian)
 
-    st.dataframe(df)
-
-    fig = px.histogram(
-        df,
-        x="Volume_Paket",
-        nbins=40,
-        title="Distribusi Volume Pengiriman"
+    fig = px.line(
+        df_harian,
+        x="tanggal",
+        y="jumlah_paket",
+        title="Trend Paket Terkirim"
     )
 
-    st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 # ===============================
-# TAB EVALUASI MODEL
+# TAB 3
 # ===============================
 
 with tab3:
 
     st.subheader("Evaluasi Model")
 
-    mae_rf = mean_absolute_error(y_test,pred_rf)
-    mae_dt = mean_absolute_error(y_test,pred_dt)
+    mae_rf = mean_absolute_error(y_test, pred_rf)
+    mae_lr = mean_absolute_error(y_test, pred_lr)
 
-    mse_rf = mean_squared_error(y_test,pred_rf)
-    mse_dt = mean_squared_error(y_test,pred_dt)
+    rmse_rf = np.sqrt(mean_squared_error(y_test, pred_rf))
+    rmse_lr = np.sqrt(mean_squared_error(y_test, pred_lr))
 
-    r2_rf = r2_score(y_test,pred_rf)
-    r2_dt = r2_score(y_test,pred_dt)
+    r2_rf = r2_score(y_test, pred_rf)
+    r2_lr = r2_score(y_test, pred_lr)
 
     eval_df = pd.DataFrame({
-
-        "Model":["Random Forest","Decision Tree"],
-        "MAE":[mae_rf,mae_dt],
-        "MSE":[mse_rf,mse_dt],
-        "R2 Score":[r2_rf,r2_dt]
-
+        "Model": ["Random Forest", "Linear Regression"],
+        "MAE": [mae_rf, mae_lr],
+        "RMSE": [rmse_rf, rmse_lr],
+        "R2": [r2_rf, r2_lr]
     })
 
     st.dataframe(eval_df)
@@ -236,9 +171,9 @@ with tab3:
     fig = px.bar(
         eval_df,
         x="Model",
-        y="R2 Score",
+        y="MAE",
         color="Model",
-        title="Perbandingan Performa Model"
+        title="Perbandingan MAE"
     )
 
-    st.plotly_chart(fig,use_container_width=True)   
+    st.plotly_chart(fig, use_container_width=True)
