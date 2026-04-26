@@ -27,7 +27,7 @@ st.markdown("""
 <style>
     .main { background-color: #f4f6f9; }
     /* Memaksa teks metrik dan label berwarna gelap agar terlihat */
-    [data-testid="stMetricValue"] { color: #2ECC71 !important; font-weight: bold !important; }
+    [data-testid="stMetricValue"] { color: white !important; font-weight: bold !important; }
     [data-testid="stMetricLabel"] { color: white !important; font-weight: 600 !important; }
     
     div[data-testid="metric-container"] {
@@ -58,17 +58,27 @@ def load_data(file):
     df = df.dropna(subset=['created_at'])
     df['tanggal'] = df['created_at'].dt.date
 
-    # Agregasi Harian (Menghitung jumlah paket per hari)
-    daily = df.groupby('tanggal').agg({'no_resi': 'count'}).reset_index()
-    daily.columns = ['Tanggal', 'Volume']
-    daily['Tanggal'] = pd.to_datetime(daily['Tanggal'])
+    df.columns = df.columns.str.lower().str.strip()
+    df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
+    df = df.dropna(subset=['created_at'])
+   
+    # Ekstrasi tanggal awal bersih
+    df['tanggal'] = df['created_at'].dt.date
     
-    # Feature Engineering untuk model (Ekstraksi Waktu)
-    daily['Hari_Angka'] = daily['Tanggal'].dt.dayofweek
-    daily['Bulan_Angka'] = daily['Tanggal'].dt.month
-    daily['Tgl_Angka'] = daily['Tanggal'].dt.day
+    # Agreagasi Harian
+    df = df.groupby('tanggal').agg({'no_resi': 'count'}).reset_index()
+    df.columns =['Tanggal', 'Volume']
     
-    return daily.sort_values('Tanggal')
+    # Feature Engineering (Menggunakan Temporary datetime untuk ektraksi angka)
+    temp_dt = pd.to_datetime(df['Tanggal'])
+    df['Hari_'] = temp_dt.dt.dayofweek
+    df['Bulan_'] = temp_dt.dt.month
+    df['Tanggal_'] = temp_dt.dt.day
+    
+    # Ubah kembali kolom tanggal menjadi tipe data agar jam 00:00 Hilang
+    df['Tanggal'] = pd.to_datetime(df['Tanggal']).dt.date
+    
+    return df.sort_values('Tanggal')
 
 # Coba muat file otomatis
 file_path = "data_historis_paket.csv"
@@ -93,7 +103,7 @@ if df_main is not None:
         st.caption("Aldy Hidayatullah - Teknik Informatika")
 
     # Siapkan Data Model
-    X = df_main[['Hari_Angka', 'Bulan_Angka', 'Tgl_Angka']]
+    X = df_main[['Hari_', 'Bulan_', 'Tanggal_']]
     y = df_main['Volume']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -104,15 +114,16 @@ if df_main is not None:
     # --- MENU: DASHBOARD ---
     if menu == "📊 Dashboard & Dataset":
         st.title("📊 Dashboard & Analisis Data")
-        tab1, tab2 = st.tabs(["📈 Tren & KPI", "📑 Data Agregasi & Korelasi"])
+        tab1, tab2 = st.tabs(["📈 Trend & KPI", "📑 Data Agregasi & Korelasi"])
         
         with tab1:
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Observasi", f"{len(df_main)} Hari")
-            c2.metric("Rerata Paket/Hari", f"{int(df_main['Volume'].mean())}")
-            c3.metric("Total Volume", f"{int(df_main['Volume'].sum())}")
+            c2.metric("Rata-rata Paket/Hari", f"{int(df_main['Volume'].mean())}")
+            c3.metric("Total Volume", f"{int(df_main['Volume'].sum()):,}")
             
-            st.subheader("Tren Volume Pengiriman Harian")
+            avg_volume = df_main["Volume"].mean()
+            st.subheader("Trend Volume Pengiriman Harian")
             fig_trend = px.line(df_main, x="Tanggal", y="Volume", markers=True, template="plotly_white")
             fig_trend.update_layout(font=dict(color="black"))
             st.plotly_chart(fig_trend, use_container_width=True)
@@ -122,7 +133,7 @@ if df_main is not None:
             st.dataframe(df_main, use_container_width=True)
             st.divider()
             st.subheader("🔗 Korelasi Fitur (Heatmap)")
-            corr = df_main[['Volume', 'Hari_Angka', 'Bulan_Angka', 'Tgl_Angka']].corr()
+            corr = df_main[['Volume', 'Hari_', 'Bulan_', 'Tanggal_']].corr()
             fig_corr, ax = plt.subplots(figsize=(8, 5))
             sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
             st.pyplot(fig_corr)
@@ -151,11 +162,70 @@ if df_main is not None:
                 r2_score(y_te, p_lr)
             ]
         }
+            # 1. Menampilkan tabel (tetap seperti kode Anda)
         st.table(pd.DataFrame(metrics).set_index("Metrik"))
-        
+            
         df_plot = pd.DataFrame(metrics).iloc[:2].melt(id_vars="Metrik", var_name="Model", value_name="Nilai")
-        fig_perf = px.bar(df_plot, x="Metrik", y="Nilai", color="Model", barmode="group", text_auto='.2f', title="Model Performance Comparison")
-        fig_perf.update_layout(plot_bgcolor='white', font=dict(color="black"))
+
+            # 3. Membuat grafik dengan pemetaan warna khusus
+        fig_perf = px.bar(
+                df_plot, 
+                x="Metrik", 
+                y="Nilai", 
+                color="Model", 
+                barmode="group", 
+                text_auto='.2f', 
+                title="Model Performance Comparison",
+                # Menggunakan warna spesifik Anda
+                color_discrete_map={
+                    "Random Forest": "#0056B3",
+                    "Linear Regression": "#FF6347"
+                },
+                template="plotly_white" # Memastikan tema latar belakang putih bersih
+            )
+
+                # --- UPDATE PADA BAGIAN LAYOUT ---
+        fig_perf.update_layout(
+            plot_bgcolor='white', 
+            font=dict(color="black", size=13), # Font diperbesar sedikit agar lebih tegas
+            yaxis_title="Nilai Error",
+            xaxis_title="",
+            legend_title_text="Algoritma",
+            
+            # Mempertebal garis sumbu X dan Y (Garis Hitam Utama)
+            xaxis=dict(
+                showline=True, 
+                linewidth=2, 
+                linecolor='black', 
+                mirror=True,
+                showgrid=False
+            ),
+            yaxis=dict(
+                showline=True, 
+                linewidth=2, 
+                linecolor='black', 
+                mirror=True,
+                showgrid=True, 
+                gridcolor='Gray' # Garis bantu tetap tipis agar tidak mengganggu
+            ),
+            
+            # Mengatur posisi legend agar tidak menutupi grafik
+            legend=dict(
+                bordercolor="Black",
+                borderwidth=1
+            )
+        )
+
+        # Mempertebal outline pada batang grafik agar warna biru dan merah lebih "keluar"
+        fig_perf.update_traces(
+            marker_line_color='black',
+            marker_line_width=1.5,
+            textfont_size=13,
+            textfont_color='black',
+            textposition="outside", 
+            cliponaxis=False
+        )
+
         st.plotly_chart(fig_perf, use_container_width=True)
 
    # --- MENU: PREDIKSI & FEATURE IMPORTANCE ---
@@ -201,26 +271,53 @@ if df_main is not None:
         if st.session_state.hasil_prediksi:
             h = st.session_state.hasil_prediksi
             m = st.session_state.metrics_eval
+            
+            rf_day = f"{int(h['res_rf']*7):,}".replace(",", ".")
+            lr_day = f"{int(h['res_lr']*7):,}".replace(",", ".")
+            
+            # 1. Hitung dan format angka untuk Mingguan
+            rf_week = f"{int(h['res_rf']*7):,}".replace(",", ".")
+            lr_week = f"{int(h['res_lr']*7):,}".replace(",", ".")
+            
+            # 2. Hitung dan format angka untuk Bulanan
+            rf_month = f"{int(h['res_rf']*30):,}".replace(",", ".")
+            lr_month = f"{int(h['res_lr']*30):,}".replace(",", ".")
+            
             with col_results:
-                st.subheader(f"Hasil Prediksi untuk: {h['tgl']}")
+                st.subheader(f"📅 Hasil Prediksi: {h['tgl']}")
                 p1, p2, p3 = st.columns(3)
-                p1.info(f"**Harian (Daily)**\n\nRandomForest: {int(h['res_rf'])} Paket | LinearRegression: {int(h['res_lr'])} Paket")
-                p2.success(f"**Estimasi Mingguan**\n\nRandomForest: {int(h['res_rf']*7)} Paket | LinearRegression: {int(h['res_lr']*7)} Paket")
-                p3.warning(f"**Estimasi Bulanan**\n\nRandomForest: {int(h['res_rf']*30)} Paket | LinearRegression: {int(h['res_lr']*30)} Paket")
-                 # --- MENAMPILKAN SKOR EVALUASI MODEL ---
-                st.write("---")
-                st.write("#### 📊 Skor Performa Model (Validasi)")
-                m1, m2 = st.columns(2)
-                with m1:
-                    st.markdown("**Random Forest:**")
-                    st.caption(f"MAE: {m['rf']['mae']:.2f} | RMSE: {m['rf']['rmse']:.2f} | R²: {m['rf']['r2']:.4f}")
-                with m2:
-                    st.markdown("**Linear Regression:**")
-                    st.caption(f"MAE: {m['lr']['mae']:.2f} | RMSE: {m['lr']['rmse']:.2f} | R²: {m['lr']['r2']:.4f}")
+                
+            with p1:
+                st.markdown("### ☀️ Harian")
+                st.metric("Random Forest", f"{rf_day} Paket")
+                st.metric("Linear Regression", f"{lr_day} Paket")
 
-        
+            with p2:
+                st.markdown("### 📅 Mingguan")
+                st.metric("Random Forest", f"{rf_week} Paket")
+                st.metric("Linear Regression", f"{lr_week} Paket")
 
-        st.divider()
+            with p3:
+                st.markdown("### 🌙 Bulanan")
+                st.metric("Random Forest", f"{rf_month} Paket")
+                st.metric("Linear Regression", f"{lr_month} Paket")
+                
+                
+            # --- MENAMPILKAN SKOR EVALUASI MODEL ---
+            st.write("---")
+
+            # Menggunakan Expander
+            with st.expander("📊 Lihat Detail Skor Performa Model", expanded=True):
+                # Baris Random Forest
+                st.markdown("🌲 **Random Forest Regressor**")
+                st.info(f"MAE: **{m['rf']['mae']:.2f}** | RMSE: **{m['rf']['rmse']:.2f}** | R²: **{m['rf']['r2']:.4f}**")
+                
+                # Baris Linear Regression
+                st.markdown("📈 **Linear Regression**")
+                st.success(f"MAE: **{m['lr']['mae']:.2f}** | RMSE: **{m['lr']['rmse']:.2f}** | R²: **{m['lr']['r2']:.4f}**")
+
+            st.divider()
+            
         show_fi = st.checkbox("🔍 Tampilkan Analisis Feature Importance")
         
         if show_fi:
@@ -252,10 +349,10 @@ if df_main is not None:
                                 y='Score', 
                                 title="Feature Importance: Random Forest",
                                 labels={'Score': 'Importance Score'},
-                                color_discrete_sequence=['#2ecc71']) 
+                                color_discrete_sequence=['#0056B3']) 
                 
                 # Gunakan xaxis untuk mengurutkan karena sekarang grafik vertikal
-                fig_rf.update_layout(template="plotly_white", font=dict(color="black"), xaxis={'categoryorder':'total descending'})
+                fig_rf.update_layout(plot_bgcolor='white', font=dict(color="black"), xaxis={'categoryorder':'total descending'})
                 st.plotly_chart(fig_rf, use_container_width=True)
 
                 with st.expander("Lihat Penjelasan Teknis (Random Forest)", expanded=True):
@@ -277,12 +374,12 @@ if df_main is not None:
                 fig_lr = px.bar(fi_lr_df, 
                                 x='Fitur', 
                                 y='Score', 
-                                title="Feature Importance: Linear Regression (Normalized)",
+                                title="Feature Importance: Linear Regression",
                                 labels={'Score': 'Normalized Coefficient Score'},
-                                color_discrete_sequence=['#3498db']) 
+                                color_discrete_sequence=['#FF6347']) 
 
                 # Gunakan xaxis untuk mengurutkan karena sekarang grafik vertikal
-                fig_lr.update_layout(template="plotly_white", font=dict(color="black"), xaxis={'categoryorder':'total descending'})
+                fig_lr.update_layout(plot_bgcolor='white', font=dict(color="black"), xaxis={'categoryorder':'total descending'})
                 st.plotly_chart(fig_lr, use_container_width=True)
 
                 with st.expander("Lihat Penjelasan Teknis (Linear Regression)", expanded=True):
