@@ -27,8 +27,8 @@ st.markdown("""
 <style>
     .main { background-color: #f4f6f9; }
     /* Memaksa teks metrik dan label berwarna gelap agar terlihat */
-    [data-testid="stMetricValue"] { color: #1e293b !important; font-weight: bold !important; }
-    [data-testid="stMetricLabel"] { color: #475569 !important; font-weight: 600 !important; }
+    [data-testid="stMetricValue"] { color: #2ECC71 !important; font-weight: bold !important; }
+    [data-testid="stMetricLabel"] { color: white !important; font-weight: 600 !important; }
     
     div[data-testid="metric-container"] {
         background: white; border-radius: 12px; padding: 15px;
@@ -165,6 +165,18 @@ if df_main is not None:
         # 1. Inisialisasi session state untuk menyimpan hasil prediksi
         if 'hasil_prediksi' not in st.session_state:
             st.session_state.hasil_prediksi = None
+            
+        if 'metrics_eval' not in st.session_state:
+            # Hitung metrik evaluasi (validasi) satu kali saja
+            X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
+            m_rf = RandomForestRegressor(n_estimators=100, random_state=42).fit(X_tr, y_tr)
+            m_lr = LinearRegression().fit(X_tr, y_tr)
+            p_rf, p_lr = m_rf.predict(X_te), m_lr.predict(X_te)
+            
+            st.session_state.metrics_eval = {
+                'rf': {'mae': mean_absolute_error(y_te, p_rf), 'rmse': np.sqrt(mean_squared_error(y_te, p_rf)), 'r2': r2_score(y_te, p_rf)},
+                'lr': {'mae': mean_absolute_error(y_te, p_lr), 'rmse': np.sqrt(mean_squared_error(y_te, p_lr)), 'r2': r2_score(y_te, p_lr)}
+            }    
 
         col_input, col_results = st.columns([1, 2])
         
@@ -177,25 +189,36 @@ if df_main is not None:
         if predict_btn:
             d = pd.to_datetime(selected_date)
             features = np.array([[d.dayofweek, d.month, d.day]])
-            res_rf = rf_final.predict(features)[0]
-            res_lr = lr_final.predict(features)[0]
-            
-            # Simpan data ke session_state agar tidak hilang saat rerun
             st.session_state.hasil_prediksi = {
                 'tgl': selected_date.strftime('%d %B %Y'),
-                'res_rf': res_rf,
-                'res_lr': res_lr
+                'res_rf': rf_final.predict(features)[0],
+                'res_lr': lr_final.predict(features)[0]
             }
+            
+          
 
         # 3. Tampilkan hasil dari session_state (jika ada)
         if st.session_state.hasil_prediksi:
             h = st.session_state.hasil_prediksi
+            m = st.session_state.metrics_eval
             with col_results:
                 st.subheader(f"Hasil Prediksi untuk: {h['tgl']}")
                 p1, p2, p3 = st.columns(3)
-                p1.info(f"**Harian (Daily)**\n\nRF: {int(h['res_rf'])} pkt | LR: {int(h['res_lr'])} pkt")
-                p2.success(f"**Estimasi Mingguan**\n\nRF: {int(h['res_rf']*7)} pkt | LR: {int(h['res_lr']*7)} pkt")
-                p3.warning(f"**Estimasi Bulanan**\n\nRF: {int(h['res_rf']*30)} pkt | LR: {int(h['res_lr']*30)} pkt")
+                p1.info(f"**Harian (Daily)**\n\nRandomForest: {int(h['res_rf'])} Paket | LinearRegression: {int(h['res_lr'])} Paket")
+                p2.success(f"**Estimasi Mingguan**\n\nRandomForest: {int(h['res_rf']*7)} Paket | LinearRegression: {int(h['res_lr']*7)} Paket")
+                p3.warning(f"**Estimasi Bulanan**\n\nRandomForest: {int(h['res_rf']*30)} Paket | LinearRegression: {int(h['res_lr']*30)} Paket")
+                 # --- MENAMPILKAN SKOR EVALUASI MODEL ---
+                st.write("---")
+                st.write("#### 📊 Skor Performa Model (Validasi)")
+                m1, m2 = st.columns(2)
+                with m1:
+                    st.markdown("**Random Forest:**")
+                    st.caption(f"MAE: {m['rf']['mae']:.2f} | RMSE: {m['rf']['rmse']:.2f} | R²: {m['rf']['r2']:.4f}")
+                with m2:
+                    st.markdown("**Linear Regression:**")
+                    st.caption(f"MAE: {m['lr']['mae']:.2f} | RMSE: {m['lr']['rmse']:.2f} | R²: {m['lr']['r2']:.4f}")
+
+        
 
         st.divider()
         show_fi = st.checkbox("🔍 Tampilkan Analisis Feature Importance")
@@ -232,7 +255,7 @@ if df_main is not None:
                                 color_discrete_sequence=['#2ecc71']) 
                 
                 # Gunakan xaxis untuk mengurutkan karena sekarang grafik vertikal
-                fig_rf.update_layout(plot_bgcolor='white', font=dict(color="black"), xaxis={'categoryorder':'total descending'})
+                fig_rf.update_layout(template="plotly_white", font=dict(color="black"), xaxis={'categoryorder':'total descending'})
                 st.plotly_chart(fig_rf, use_container_width=True)
 
                 with st.expander("Lihat Penjelasan Teknis (Random Forest)", expanded=True):
@@ -259,7 +282,7 @@ if df_main is not None:
                                 color_discrete_sequence=['#3498db']) 
 
                 # Gunakan xaxis untuk mengurutkan karena sekarang grafik vertikal
-                fig_lr.update_layout(plot_bgcolor='white', font=dict(color="black"), xaxis={'categoryorder':'total descending'})
+                fig_lr.update_layout(template="plotly_white", font=dict(color="black"), xaxis={'categoryorder':'total descending'})
                 st.plotly_chart(fig_lr, use_container_width=True)
 
                 with st.expander("Lihat Penjelasan Teknis (Linear Regression)", expanded=True):
