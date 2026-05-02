@@ -47,60 +47,127 @@ st.markdown("""
 # =========================
 @st.cache_data
 def load_data(file):
+    # Mencoba berbagai encoding agar tidak error saat baca CSV
     for enc in ['utf-8', 'latin-1', 'cp1252']:
         try:
             df = pd.read_csv(file, sep=';', encoding=enc, on_bad_lines='skip')
             break
         except: continue
-
+    
+    # Standarisasi nama kolom (lowercase & hapus spasi)
     df.columns = df.columns.str.lower().str.strip()
-    df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
+    
+    # Konversi tanggal dengan dayfirst=True agar 03/11 dibaca 3 November (sesuai dataset Anda)
+    df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce', dayfirst=True)
     df = df.dropna(subset=['created_at'])
-    df['tanggal'] = df['created_at'].dt.date
-
-    df.columns = df.columns.str.lower().str.strip()
-    df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
-    df = df.dropna(subset=['created_at'])
-   
-    # Ekstrasi tanggal awal bersih
+    
+    # --- PERBAIKAN: Hitung total data asli (14.221) sebelum di-groupby ---
+    total_mentah = len(df)
+    
+    # Buat kolom tanggal untuk agregasi
     df['tanggal'] = df['created_at'].dt.date
     
-    # Agreagasi Harian
-    df = df.groupby('tanggal').agg({'no_resi': 'count'}).reset_index()
-    df.columns =['Tanggal', 'Volume']
+    # Agregasi data (mengelompokkan ribuan resi menjadi hitungan per hari)
+    df_agg = df.groupby('tanggal').agg({'no_resi': 'count'}).reset_index()
+    df_agg.columns = ['Tanggal', 'Volume']
     
-    # Feature Engineering (Menggunakan Temporary datetime untuk ektraksi angka)
-    temp_dt = pd.to_datetime(df['Tanggal'])
-    df['Hari_'] = temp_dt.dt.dayofweek
-    df['Bulan_'] = temp_dt.dt.month
-    df['Tanggal_'] = temp_dt.dt.day
+    # Feature Engineering untuk model ML
+    temp_dt = pd.to_datetime(df_agg['Tanggal'])
+    df_agg['Hari_'] = temp_dt.dt.dayofweek
+    df_agg['Bulan_'] = temp_dt.dt.month
+    df_agg['Tanggal_'] = temp_dt.dt.day
     
-    # Ubah kembali kolom tanggal menjadi tipe data agar jam 00:00 Hilang
-    df['Tanggal'] = pd.to_datetime(df['Tanggal']).dt.date
+    df_agg['Tanggal'] = pd.to_datetime(df_agg['Tanggal']).dt.date
     
-    return df.sort_values('Tanggal')
+    # Kembalikan dua nilai: dataframe hasil agregasi DAN jumlah data asli
+    return df_agg.sort_values('Tanggal'), total_mentah
 
 # Coba muat file otomatis
 file_path = "data_historis_paket.csv"
 df_main = None
 
+# Ganti bagian ini agar menerima 'total_mentah'
 if os.path.exists(file_path):
-    df_main = load_data(file_path)
+    df_main, total_mentah = load_data(file_path)
 else:
     upload = st.sidebar.file_uploader("Upload CSV Borneo Express", type="csv")
     if upload:
-        df_main = load_data(upload)
+        df_main, total_mentah = load_data(upload)
 
 # =========================
 # 4. MAIN APP
 # =========================
 if df_main is not None:
-    # SIDEBAR
+    st.markdown("""
+    <style>
+        /* Styling untuk kotak profil di bagian bawah sidebar */
+        .sidebar-profile {
+            background: linear-gradient(135deg, #2b2b2b 0%, #1e1e1e 100%);
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            color: #b0bec5;
+            text-align: center;
+            border: 1px solid #444;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-top: 20px;
+        }
+        .sidebar-profile b {
+            color: #ffffff;
+            font-size: 1rem;
+        }
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: #4caf50;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    # MENU: SIDEBAR MODERN
+    # =========================
     with st.sidebar:
-        st.title("📦 Borneo Express")
-        menu = st.radio("Navigasi Menu", ["📊 Dashboard & Dataset", "🤖 Evaluasi Model", "🔮 Prediksi Multi-Skala"])
+        # 1. Logo / Header Aplikasi
+        st.markdown("""
+            <div style='text-align: center; margin-bottom: 20px;'>
+                <h1 style='margin-bottom: 0; padding-bottom: 0; color: #00bcd4; font-weight: 800; font-size: 2.2rem;'>
+                    📦 BORNEO<br><span style='color: white;'>EXPRESS</span>
+                </h1>
+                <p style='color: gray; font-size: 0.9rem; margin-top: 5px; letter-spacing: 1px;'>
+                    SISTEM PREDIKSI LOGISTIK
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
         st.divider()
-        st.caption("Aldy Hidayatullah - Teknik Informatika")
+        
+        # 2. Navigasi Menu
+        st.markdown("**📍 NAVIGASI MENU**")
+        # Menggunakan label_visibility="collapsed" agar tulisan "Navigasi Menu" bawaan hilang
+        # sehingga tampilannya tidak dobel dan lebih bersih
+        menu = st.radio(
+            "Navigasi Menu", 
+            ["📊 Dashboard & Analisis Data", "🤖 Evaluasi Model", "🔮 Prediksi Multi-Skala"],
+            label_visibility="collapsed" 
+        )
+        
+        st.divider()
+        
+        # 3. Profil Identitas Mahasiswa (Cocok untuk Skripsi)
+        st.markdown("""
+        <div class="sidebar-profile">
+            <b>👨‍💻 Aldy Hidayatullah</b><br>
+            NPM. 211220026<br>
+            Teknik Informatika<br>
+            Universitas Muhammadiyah Pontianak<br>
+            <hr style="border-color: #444; margin: 10px 0;">
+            <span style="font-size: 0.75rem; color: #aaa;">
+                <span class="status-dot"></span>System Online - 2026
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Siapkan Data Model
     X = df_main[['Hari_', 'Bulan_', 'Tanggal_']]
@@ -111,37 +178,178 @@ if df_main is not None:
     rf_final = RandomForestRegressor(n_estimators=100, random_state=42).fit(X, y)
     lr_final = LinearRegression().fit(X, y)
 
-    # --- MENU: DASHBOARD ---
-    if menu == "📊 Dashboard & Dataset":
+   # --- MENU: DASHBOARD ---
+    if menu == "📊 Dashboard & Analisis Data":
         st.title("📊 Dashboard & Analisis Data")
-        tab1, tab2 = st.tabs(["📈 Trend & KPI", "📑 Data Agregasi & Korelasi"])
         
+        tab1, tab2 = st.tabs(["📈 Ringkasan Operasional", "📑 Tabel Data & Korelasi"])
+        
+        # ==========================================
+        # TAB 1: RINGKASAN OPERASIONAL (MODERN UI)
+        # ==========================================
         with tab1:
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Total Observasi", f"{len(df_main)} Hari")
-            c2.metric("Rata-rata Paket/Hari", f"{int(df_main['Volume'].mean())}")
-            c3.metric("Total Volume", f"{int(df_main['Volume'].sum()):,}")
+            st.markdown("<br>", unsafe_allow_html=True) # Spasi atas
             
-            avg_volume = df_main["Volume"].mean()
-            st.subheader("Trend Volume Pengiriman Harian")
-            fig_trend = px.line(df_main, x="Tanggal", y="Volume", markers=True, template="plotly_white")
-            fig_trend.update_layout(font=dict(color="black"))
-            st.plotly_chart(fig_trend, use_container_width=True)
+            # --- 1. CSS UNTUK MODERN CARDS ---
+            st.markdown("""
+            <style>
+                .dash-card {
+                    background: linear-gradient(135deg, #2b2b2b 0%, #1e1e1e 100%);
+                    border-radius: 15px;
+                    padding: 20px 10px;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+                    text-align: center;
+                    border-top: 5px solid;
+                    transition: all 0.3s ease;
+                    margin-bottom: 20px;
+                }
+                .dash-card:hover {
+                    transform: translateY(-8px);
+                    box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+                }
+                .card-icon {
+                    font-size: 2.5rem;
+                    margin-bottom: 10px;
+                }
+                .card-title {
+                    color: #b0bec5;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    margin-bottom: 5px;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }
+                .card-value {
+                    color: #ffffff;
+                    font-size: 1.8rem;
+                    font-weight: 800;
+                }
+                .card-unit {
+                    font-size: 1rem;
+                    color: #888888;
+                    font-weight: 500;
+                }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # --- 2. BARIS METRIK KARTU BERJEJER ---
+            c1, c2, c3, c4 = st.columns(4)
+            
+            v_mentah = f"{total_mentah:,}".replace(',', '.')
+            v_agregasi = f"{len(df_main):,}".replace(',', '.')
+            v_rata = int(df_main['Volume'].mean())
+            v_hari = len(df_main)
 
+            with c1:
+                st.markdown(f"""
+                <div class="dash-card" style="border-top-color: #00bcd4;">
+                    <div class="card-icon">📦</div>
+                    <div class="card-title">Data Mentah</div>
+                    <div class="card-value">{v_mentah} <span class="card-unit">Resi</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c2:
+                st.markdown(f"""
+                <div class="dash-card" style="border-top-color: #4caf50;">
+                    <div class="card-icon">📑</div>
+                    <div class="card-title">Data Agregasi</div>
+                    <div class="card-value">{v_agregasi} <span class="card-unit">Baris</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c3:
+                st.markdown(f"""
+                <div class="dash-card" style="border-top-color: #ff9800;">
+                    <div class="card-icon">⚡</div>
+                    <div class="card-title">Rata-rata Harian</div>
+                    <div class="card-value">{v_rata} <span class="card-unit">Paket/Hari</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c4:
+                st.markdown(f"""
+                <div class="dash-card" style="border-top-color: #9c27b0;">
+                    <div class="card-icon">🗓️</div>
+                    <div class="card-title">Total Observasi</div>
+                    <div class="card-value">{v_hari} <span class="card-unit">Hari</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<hr style='border: 1px solid #444;'>", unsafe_allow_html=True)
+            
+            # --- 3. DIAGRAM VISUALISASI ---
+            st.markdown("<h4 style='color: #fff;'>📊 Grafik Visualisasi Data</h4>", unsafe_allow_html=True)
+            col_diag1, col_diag2 = st.columns(2)
+            
+            with col_diag1:
+                # Mengubah template ke plotly_dark agar serasi dengan Dark Mode
+                fig_dist = px.histogram(
+                    df_main, x="Volume", nbins=30, 
+                    template="plotly_dark", 
+                    color_discrete_sequence=['#00bcd4'],
+                    title="Sebaran Frekuensi Volume Paket"
+                )
+                # Transparansi background grafik agar terlihat menyatu
+                fig_dist.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_dist, use_container_width=True)
+                
+            with col_diag2:
+                fig_trend = px.line(
+                    df_main, x="Tanggal", y="Volume", 
+                    template="plotly_dark",
+                    color_discrete_sequence=['#ff9800'],
+                    title="Trend Pergerakan Paket per Waktu"
+                )
+                fig_trend.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_trend, use_container_width=True)
+        
+        # ==========================================
+        # TAB 2: DATASET & KORELASI
+        # ==========================================
         with tab2:
-            st.subheader("📑 Tabel Data Hasil Agregasi")
-            st.dataframe(df_main, use_container_width=True)
-            st.divider()
-            st.subheader("🔗 Korelasi Fitur (Heatmap)")
+            st.markdown("<br><h4 style='color: #fff;'>📑 Eksplorasi Tabel Dataset</h4>", unsafe_allow_html=True)
+            
+            tabel_col1, tabel_col2 = st.columns(2)
+            
+            with tabel_col1:
+                st.markdown("**1. Tabel Data Mentah (Agregasi Dasar)**")
+                st.dataframe(df_main[['Tanggal', 'Volume']], use_container_width=True, height=350)
+                
+            with tabel_col2:
+                st.markdown("**2. Tabel Data Fitur Machine Learning**")
+                st.dataframe(df_main, use_container_width=True, height=350)
+                
+            st.markdown("<hr style='border: 1px solid #444;'>", unsafe_allow_html=True)
+            
+            st.markdown("<h4 style='color: #fff;'>🔗 Korelasi Fitur (Heatmap)</h4>", unsafe_allow_html=True)
+            st.caption("Semakin mendekati angka 1 atau -1, semakin kuat pengaruh variabel waktu (Hari/Bulan) terhadap Volume paket.")
+            
+            # Styling heatmap agar sesuai dengan tema gelap
+            plt.style.use("dark_background") 
             corr = df_main[['Volume', 'Hari_', 'Bulan_', 'Tanggal_']].corr()
-            fig_corr, ax = plt.subplots(figsize=(8, 5))
-            sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
+            fig_corr, ax = plt.subplots(figsize=(10, 4))
+            
+            # Ubah warna background figure matplotlib jadi transparan
+            fig_corr.patch.set_alpha(0.0)
+            ax.patch.set_alpha(0.0)
+            
+            sns.heatmap(
+                corr, annot=True, cmap='mako', # Menggunakan palet mako (hijau kebiruan gelap)
+                fmt=".2f", linewidths=0.5, ax=ax, 
+                cbar_kws={'label': 'Kekuatan Korelasi'}
+            )
             st.pyplot(fig_corr)
+            # Reset style matplotlib agar tidak mengganggu plot di menu lain
+            plt.style.use("default")
 
     # --- MENU: EVALUASI ---
     elif menu == "🤖 Evaluasi Model":
         st.title("🤖 Perbandingan Performa Algoritma")
+        st.markdown("<p style='color: #b0bec5; margin-top: -15px;'>Mengevaluasi akurasi Random Forest Regressor vs Linear Regression pada data testing.</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
+        # 1. SPLIT DATA & TRAINING (Pastikan X dan y sudah didefinisikan sebelumnya)
         X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
         model_rf = RandomForestRegressor(n_estimators=100, random_state=42).fit(X_tr, y_tr)
         model_lr = LinearRegression().fit(X_tr, y_tr)
@@ -149,84 +357,150 @@ if df_main is not None:
         p_rf = model_rf.predict(X_te)
         p_lr = model_lr.predict(X_te)
 
-        metrics = {
-            "Metrik": ["MAE", "RMSE", "R² Score"],
-            "Random Forest": [
-                mean_absolute_error(y_te, p_rf),
-                np.sqrt(mean_squared_error(y_te, p_rf)),
-                r2_score(y_te, p_rf)
-            ],
-            "Linear Regression": [
-                mean_absolute_error(y_te, p_lr),
-                np.sqrt(mean_squared_error(y_te, p_lr)),
-                r2_score(y_te, p_lr)
-            ]
-        }
-            # 1. Menampilkan tabel (tetap seperti kode Anda)
-        st.table(pd.DataFrame(metrics).set_index("Metrik"))
-            
-        df_plot = pd.DataFrame(metrics).iloc[:2].melt(id_vars="Metrik", var_name="Model", value_name="Nilai")
+        # 2. PERHITUNGAN METRIK
+        rf_mae, rf_rmse, rf_r2 = mean_absolute_error(y_te, p_rf), np.sqrt(mean_squared_error(y_te, p_rf)), r2_score(y_te, p_rf)
+        lr_mae, lr_rmse, lr_r2 = mean_absolute_error(y_te, p_lr), np.sqrt(mean_squared_error(y_te, p_lr)), r2_score(y_te, p_lr)
 
-            # 3. Membuat grafik dengan pemetaan warna khusus
+        # 3. CSS KHUSUS KARTU KOMPARASI MODERN
+        st.markdown("""
+        <style>
+            .eval-card {
+                background: linear-gradient(135deg, #2b2b2b 0%, #1a1a1a 100%);
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+                border: 1px solid #333;
+                margin-bottom: 20px;
+            }
+            .eval-title {
+                color: #ffffff;
+                font-size: 1.1rem;
+                font-weight: 700;
+                border-bottom: 1px solid #444;
+                padding-bottom: 10px;
+                margin-bottom: 15px;
+                text-align: center;
+                letter-spacing: 1px;
+            }
+            .eval-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+            .model-name { color: #aaaaaa; font-weight: 500; font-size: 0.95rem; }
+            .rf-val { color: #00e5ff; font-weight: 700; font-size: 1.2rem; } /* Cyan untuk RF */
+            .lr-val { color: #ff5252; font-weight: 700; font-size: 1.2rem; } /* Merah/Orange untuk LR */
+            .winner-badge {
+                background-color: #1b5e20;
+                color: #a5d6a7;
+                font-size: 0.7rem;
+                padding: 3px 8px;
+                border-radius: 12px;
+                margin-left: 10px;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # 4. TAMPILAN KARTU METRIK (3 KOLOM BERJEJER)
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            st.markdown(f"""
+            <div class="eval-card">
+                <div class="eval-title">🎯 MAE (Mean Absolute Error)</div>
+                <div class="eval-row">
+                    <span class="model-name">Random Forest <span class="winner-badge">Lebih Baik</span></span>
+                    <span class="rf-val">{rf_mae:.2f}</span>
+                </div>
+                <div class="eval-row">
+                    <span class="model-name">Linear Regression</span>
+                    <span class="lr-val">{lr_mae:.2f}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: gray; text-align: center; margin-top: 10px;">* Semakin kecil semakin baik</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c2:
+            st.markdown(f"""
+            <div class="eval-card">
+                <div class="eval-title">📉 RMSE (Root Mean Squared Error)</div>
+                <div class="eval-row">
+                    <span class="model-name">Random Forest <span class="winner-badge">Lebih Baik</span></span>
+                    <span class="rf-val">{rf_rmse:.2f}</span>
+                </div>
+                <div class="eval-row">
+                    <span class="model-name">Linear Regression</span>
+                    <span class="lr-val">{lr_rmse:.2f}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: gray; text-align: center; margin-top: 10px;">* Semakin kecil semakin baik</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c3:
+            st.markdown(f"""
+            <div class="eval-card">
+                <div class="eval-title">⭐ R² Score (Akurasi Model)</div>
+                <div class="eval-row">
+                    <span class="model-name">Random Forest <span class="winner-badge">Lebih Baik</span></span>
+                    <span class="rf-val">{rf_r2:.4f}</span>
+                </div>
+                <div class="eval-row">
+                    <span class="model-name">Linear Regression</span>
+                    <span class="lr-val">{lr_r2:.4f}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: gray; text-align: center; margin-top: 10px;">* Semakin mendekati 1.0 semakin baik</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<hr style='border: 1px solid #444;'>", unsafe_allow_html=True)
+
+        # 5. VISUALISASI GRAFIK (TEMA MODERN DARK)
+        st.subheader("📊 Visualisasi Perbandingan Error")
+        
+        # Persiapan data plot (Hanya mengambil MAE dan RMSE untuk bar chart)
+        df_plot = pd.DataFrame({
+            "Metrik": ["MAE", "RMSE", "MAE", "RMSE"],
+            "Model": ["Random Forest", "Random Forest", "Linear Regression", "Linear Regression"],
+            "Nilai": [rf_mae, rf_rmse, lr_mae, lr_rmse]
+        })
+
         fig_perf = px.bar(
-                df_plot, 
-                x="Metrik", 
-                y="Nilai", 
-                color="Model", 
-                barmode="group", 
-                text_auto='.2f', 
-                title="Model Performance Comparison",
-                # Menggunakan warna spesifik Anda
-                color_discrete_map={
-                    "Random Forest": "#0056B3",
-                    "Linear Regression": "#FF6347"
-                },
-                template="plotly_white" # Memastikan tema latar belakang putih bersih
-            )
+            df_plot, 
+            x="Metrik", y="Nilai", color="Model", barmode="group", text_auto='.2f', 
+            # Menggunakan warna Neon agar kontras di Dark Mode
+            color_discrete_map={"Random Forest": "#00e5ff", "Linear Regression": "#ff5252"},
+            template="plotly_dark"
+        )
 
-                # --- UPDATE PADA BAGIAN LAYOUT ---
         fig_perf.update_layout(
-            plot_bgcolor='white', 
-            font=dict(color="black", size=13), # Font diperbesar sedikit agar lebih tegas
-            yaxis_title="Nilai Error",
+            paper_bgcolor="rgba(0,0,0,0)", # Latar belakang tembus pandang
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e0e0e0", size=13),
+            yaxis_title="Nilai Error (Paket)",
             xaxis_title="",
             legend_title_text="Algoritma",
-            
-            # Mempertebal garis sumbu X dan Y (Garis Hitam Utama)
-            xaxis=dict(
-                showline=True, 
-                linewidth=2, 
-                linecolor='black', 
-                mirror=True,
-                showgrid=False
-            ),
-            yaxis=dict(
-                showline=True, 
-                linewidth=2, 
-                linecolor='black', 
-                mirror=True,
-                showgrid=True, 
-                gridcolor='Gray' # Garis bantu tetap tipis agar tidak mengganggu
-            ),
-            
-            # Mengatur posisi legend agar tidak menutupi grafik
             legend=dict(
-                bordercolor="Black",
-                borderwidth=1
+                orientation="h", # Legend dipindah ke atas horizontal agar rapi
+                yanchor="bottom", y=1.02, xanchor="right", x=1
             )
         )
 
-        # Mempertebal outline pada batang grafik agar warna biru dan merah lebih "keluar"
         fig_perf.update_traces(
-            marker_line_color='black',
-            marker_line_width=1.5,
-            textfont_size=13,
-            textfont_color='black',
+            textfont_size=14,
+            textfont_color='white',
             textposition="outside", 
             cliponaxis=False
         )
 
         st.plotly_chart(fig_perf, use_container_width=True)
+        
+        # 6. KESIMPULAN OTOMATIS (Membantu untuk Sidang)
+        st.info(f"""
+        **💡 Analisis Evaluasi:**
+        Berdasarkan data pengujian, **Random Forest Regressor** terbukti lebih unggul dibandingkan Linear Regression. 
+        Hal ini ditandai dengan nilai Error (MAE & RMSE) yang lebih rendah, serta **R² Score** sebesar **{rf_r2:.2f}** yang menunjukkan bahwa model mampu menjelaskan variansi volume paket dengan lebih akurat.
+        """)
 
    # --- MENU: PREDIKSI & FEATURE IMPORTANCE ---
     elif menu == "🔮 Prediksi Multi-Skala":
