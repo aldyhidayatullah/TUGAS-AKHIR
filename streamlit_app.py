@@ -232,7 +232,7 @@ if df_main is not None:
     elif menu == "🔮 Prediksi Multi-Skala":
         st.title("🔮 Prediksi & Feature Importance Analysis")
 
-        # 1. Inisialisasi session state untuk menyimpan hasil prediksi
+       # 1. Inisialisasi session state untuk menyimpan hasil prediksi
         if 'hasil_prediksi' not in st.session_state:
             st.session_state.hasil_prediksi = None
             
@@ -248,60 +248,155 @@ if df_main is not None:
                 'lr': {'mae': mean_absolute_error(y_te, p_lr), 'rmse': np.sqrt(mean_squared_error(y_te, p_lr)), 'r2': r2_score(y_te, p_lr)}
             }    
 
-        col_input, col_results = st.columns([1, 2])
+        # Layout kolom input dan hasil
+        col_input, col_results = st.columns([1.2, 2.8])
         
         with col_input:
-            st.write("### Input Prediksi")
-            selected_date = st.date_input("Pilih Tanggal Prediksi", value=df_main['Tanggal'].max())
-            predict_btn = st.button("Jalankan Prediksi")
+            st.markdown("<h3 style='color: #1f77b4;'>📅 Input Prediksi</h3>", unsafe_allow_html=True)
+            with st.container(border=True):
+                selected_date = st.date_input("Pilih Tanggal Prediksi", value=df_main['Tanggal'].max())
+                predict_btn = st.button("🚀 Jalankan Prediksi", use_container_width=True, type="primary")
 
         # 2. Simpan hasil ke dalam session_state saat tombol ditekan
         if predict_btn:
             d = pd.to_datetime(selected_date)
+            # Pastikan model rf_final dan lr_final sudah dilatih sebelum blok ini!
             features = np.array([[d.dayofweek, d.month, d.day]])
             st.session_state.hasil_prediksi = {
                 'tgl': selected_date.strftime('%d %B %Y'),
                 'res_rf': rf_final.predict(features)[0],
                 'res_lr': lr_final.predict(features)[0]
             }
-            
           
-
-        # 3. Tampilkan hasil dari session_state (jika ada)
+        # 3. Tampilkan hasil dari session_state (jika ada) dalam bentuk Card UI
         if st.session_state.hasil_prediksi:
             h = st.session_state.hasil_prediksi
             m = st.session_state.metrics_eval
             
-            rf_day = f"{int(h['res_rf']*7):,}".replace(",", ".")
-            lr_day = f"{int(h['res_lr']*7):,}".replace(",", ".")
+            # Hitung dan format angka
+            # Harian (Asli)
+            rf_day = f"{int(h['res_rf']):,}".replace(",", ".")
+            lr_day = f"{int(h['res_lr']):,}".replace(",", ".")
             
-            # 1. Hitung dan format angka untuk Mingguan
+            # Mingguan (* 7)
             rf_week = f"{int(h['res_rf']*7):,}".replace(",", ".")
             lr_week = f"{int(h['res_lr']*7):,}".replace(",", ".")
             
-            # 2. Hitung dan format angka untuk Bulanan
+            # Bulanan (* 30)
             rf_month = f"{int(h['res_rf']*30):,}".replace(",", ".")
             lr_month = f"{int(h['res_lr']*30):,}".replace(",", ".")
             
+            # CSS untuk styling Card Modern
+            st.markdown("""
+            <style>
+                .pred-card {
+                    background: linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%);
+                    border-radius: 15px;
+                    padding: 20px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2);
+                    border-left: 5px solid #1f77b4;
+                    margin-bottom: 15px;
+                    transition: transform 0.2s;
+                    color: #e0e0e0;
+                }
+                .pred-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+                }
+                .card-title {
+                    font-size: 1.1rem;
+                    color: #ffffff;
+                    margin-bottom: 15px;
+                    font-weight: 600;
+                    border-bottom: 1px solid #444;
+                    padding-bottom: 8px;
+                }
+                .model-box {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                    padding: 10px;
+                    background-color: #333333;
+                    border-radius: 8px;
+                    border: 1px solid #444;
+                }
+                .model-name {
+                    font-weight: 500;
+                    color: #e0e0e0;
+                    font-size: 0.95rem;
+                }
+                .model-rf-val {
+                    font-size: 1.3rem;
+                    font-weight: 700;
+                    color: #4caf50; /* Hijau terang agar kontras di latar gelap */
+                }
+                .model-lr-val {
+                    font-size: 1.3rem;
+                    font-weight: 700;
+                    color: #ffb74d; /* Oranye terang agar kontras di latar gelap */
+                }
+                .badge {
+                    font-size: 0.7rem;
+                    background: #1b5e20; /* Hijau lumut gelap */
+                    color: #a5d6a7; /* Teks hijau pucat */
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    margin-left: 5px;
+                }
+            </style>
+            """, unsafe_allow_html=True)
+            
             with col_results:
-                st.subheader(f"📅 Hasil Prediksi: {h['tgl']}")
+                st.markdown(f"<h3 style='color: #white; margin-top: 0;'>🎯 Hasil Prediksi: {h['tgl']}</h3>", unsafe_allow_html=True)
+                
+                # Menggunakan 3 kolom untuk 3 Card
                 p1, p2, p3 = st.columns(3)
                 
-            with p1:
-                st.markdown("### ☀️ Harian")
-                st.metric("Random Forest", f"{rf_day} Paket")
-                st.metric("Linear Regression", f"{lr_day} Paket")
+                with p1:
+                    st.markdown(f"""
+                    <div class="pred-card" style="border-left-color: #00bcd4;">
+                        <div class="card-title">☀️ Harian</div>
+                        <div class="model-box">
+                            <span class="model-name">Random Forest<span class="badge">Best</span>
+                            <span class="model-rf-val">{rf_day} <span style="font-size:0.8rem; color:#888;">Paket</span></span>
+                        </div>
+                        <div class="model-box">
+                            <span class="model-name">Lin. Regression</span>
+                            <span class="model-lr-val">{lr_day} <span style="font-size:0.8rem; color:#888;">Paket</span></span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-            with p2:
-                st.markdown("### 📅 Mingguan")
-                st.metric("Random Forest", f"{rf_week} Paket")
-                st.metric("Linear Regression", f"{lr_week} Paket")
+                with p2:
+                    st.markdown(f"""
+                    <div class="pred-card" style="border-left-color: #3f51b5;">
+                        <div class="card-title">📅 Mingguan (x7)</div>
+                        <div class="model-box">
+                            <span class="model-name">Random Forest</span>
+                            <span class="model-rf-val">{rf_week} <span style="font-size:0.8rem; color:#888;">Paket</span></span>
+                        </div>
+                        <div class="model-box">
+                            <span class="model-name">Lin. Regression</span>
+                            <span class="model-lr-val">{lr_week} <span style="font-size:0.8rem; color:#888;">Paket</span></span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-            with p3:
-                st.markdown("### 🌙 Bulanan")
-                st.metric("Random Forest", f"{rf_month} Paket")
-                st.metric("Linear Regression", f"{lr_month} Paket")
-                
+                with p3:
+                    st.markdown(f"""
+                    <div class="pred-card" style="border-left-color: #9c27b0;">
+                        <div class="card-title">🌙 Bulanan (x30)</div>
+                        <div class="model-box">
+                            <span class="model-name">Random Forest</span>
+                            <span class="model-rf-val">{rf_month} <span style="font-size:0.8rem; color:#888;">Paket</span></span>
+                        </div>
+                        <div class="model-box">
+                            <span class="model-name">Lin. Regression</span>
+                            <span class="model-lr-val">{lr_month} <span style="font-size:0.8rem; color:#888;">Paket</span></span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
             # --- MENAMPILKAN SKOR EVALUASI MODEL ---
             st.write("---")
