@@ -418,7 +418,7 @@ if df_main is not None:
             with col_results:
                 st.markdown(f"<h3 style='color: white; margin-top: 0;'>🎯 Hasil Prediksi: {h['tgl']}</h3>", unsafe_allow_html=True)
                 
-                # Menampilkan status deteksi otomatis kalender
+                # MENAMPILKAN STATUS KALENDER OTOMATIS 
                 lbl_hol = '<span class="status-badge" style="background:#d32f2f; color:white;">🔥 Peak Season/Libur Aktif</span>' if h['is_hol'] == 1 else '<span class="status-badge" style="background:#388e3c; color:white;">🍃 Hari Reguler</span>'
                 lbl_pro = '<span class="status-badge" style="background:#f57c00; color:white;">🛍️ Promo Tanggal Kembar</span>' if h['is_pro'] == 1 else ''
                 st.markdown(f"**Deteksi Status Kalender Sistem:** {lbl_hol} {lbl_pro}", unsafe_allow_html=True)
