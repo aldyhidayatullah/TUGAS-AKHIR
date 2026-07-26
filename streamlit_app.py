@@ -10,7 +10,8 @@ from xgboost import XGBRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import os
-import holidays  # Library kalender otomatis
+import holidays # Library kalender otomatis
+import base64 
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN & STYLE VISUAL
@@ -201,8 +202,8 @@ if df_main is not None:
     y = df_main['Volume']
     
     # Pelatihan Model Akhir
-    rf_final = RandomForestRegressor(n_estimators=100, random_state=42).fit(X, y)
-    xgb_final = XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=5, random_state=42).fit(X, y)
+    rf_final = RandomForestRegressor(n_estimators=200, random_state=42).fit(X, y)
+    xgb_final = XGBRegressor(n_estimators=300, learning_rate=0.1, max_depth=5, random_state=42).fit(X, y)
 
     # --- MENU 1: DASHBOARD ---
     if menu == "📊 Dashboard & Analisis Data":
@@ -426,11 +427,11 @@ if df_main is not None:
 
                 p1, p2, p3 = st.columns(3)
                 with p1:
-                    st.markdown(f'<div class="pred-card" style="border-left-color: #00bcd4;"><div class="card-title">☀️ Harian</div><div class="model-box"><span class="model-name">Random Forest</span><span class="model-rf-val">{rf_day} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div><div class="model-box"><span class="model-name">XGBoost Reg.</span><span class="model-xgb-val">{xgb_day} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pred-card" style="border-left-color: #00bcd4;"><div class="card-title">☀️ Harian</div><div class="model-box"><span class="model-name">Random Forest</span><span class="model-rf-val">{rf_day} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div><div class="model-box"><span class="model-name">XGBoost </span><span class="model-xgb-val">{xgb_day} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div></div>', unsafe_allow_html=True)
                 with p2:
-                    st.markdown(f'<div class="pred-card" style="border-left-color: #3f51b5;"><div class="card-title">📅 Mingguan (x7)</div><div class="model-box"><span class="model-name">Random Forest</span><span class="model-rf-val">{rf_week} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div><div class="model-box"><span class="model-name">XGBoost Reg.</span><span class="model-xgb-val">{xgb_week} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pred-card" style="border-left-color: #3f51b5;"><div class="card-title">📅 Mingguan (x7)</div><div class="model-box"><span class="model-name">Random Forest</span><span class="model-rf-val">{rf_week} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div><div class="model-box"><span class="model-name">XGBoost </span><span class="model-xgb-val">{xgb_week} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div></div>', unsafe_allow_html=True)
                 with p3:
-                    st.markdown(f'<div class="pred-card" style="border-left-color: #9c27b0;"><div class="card-title">🌙 Bulanan (x30)</div><div class="model-box"><span class="model-name">Random Forest</span><span class="model-rf-val">{rf_month} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div><div class="model-box"><span class="model-name">XGBoost Reg.</span><span class="model-xgb-val">{xgb_month} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pred-card" style="border-left-color: #9c27b0;"><div class="card-title">🌙 Bulanan (x30)</div><div class="model-box"><span class="model-name">Random Forest</span><span class="model-rf-val">{rf_month} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div><div class="model-box"><span class="model-name">XGBoost </span><span class="model-xgb-val">{xgb_month} <span style="font-size:0.8rem; color:#888;">Pkt</span></span></div></div>', unsafe_allow_html=True)
                 
             st.write("---")
             with st.expander("📊 Lihat Detail Skor Validasi Model Pengujian", expanded=True):
